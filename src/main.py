@@ -90,6 +90,56 @@ def now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def american_to_decimal(raw: str) -> float | None:
+    """Convert an American-odds string (e.g. -143, +110) to decimal odds."""
+    text = raw.replace("+", "").strip()
+    try:
+        price = float(text)
+    except ValueError:
+        return None
+    if price == 0:
+        return None
+    if price > 0:
+        return round(1.0 + price / 100.0, 4)
+    return round(1.0 + 100.0 / abs(price), 4)
+
+
+# Tournament-name clues used to infer the game when Betway's header is generic "Esports".
+GAME_INFERENCE_KEYWORDS = [
+    ("cs2", ["cs 2", "counter-strike", "counter strike", "csgo", "cs:go", "iem", "esl", "blast", "major", "pgl", "dreamhack", "faceit", "flashpoint", "elisa", "cct", "eslc", "terminus", "perfect world"]),
+    ("dota 2", ["dota", "the international", "dreamleague", "esl one", "betboom", "fiat lux", "pgl", "weplay", "beyond the summit", "bts", "esports world cup"]),
+    ("league of legends", ["league of legends", "lol ", "lec ", "lcs ", "lck ", "lpl ", "msi", "worlds", "esports world cup"]),
+    ("valorant", ["valorant", "vct", "masters", "champions tour"]),
+    ("rainbow six siege", ["rainbow six", "r6 ", "six invitational", "pro league"]),
+    ("overwatch", ["overwatch", "owcs", "owl"]),
+    ("starcraft ii", ["starcraft", "gsl", "wardi", "dreamhack"]),
+]
+
+
+def infer_game_from_text(text: str) -> str | None:
+    lowered = f" {text.lower()} "
+    for game, keywords in GAME_INFERENCE_KEYWORDS:
+        for kw in keywords:
+            if f" {kw} " in lowered or lowered.startswith(f"{kw} ") or lowered.endswith(f" {kw}"):
+                return game
+    return None
+
+
+def normalise_betway_game(game_raw: str, league: str, title: str) -> str:
+    """Return a canonical game name for Betway, using headers + tournament clues."""
+    if game_raw and game_raw.lower() != "esports":
+        candidate = normalise_game(game_raw)
+        if candidate.lower() not in {"esports", "unknown"}:
+            return candidate
+    for src in (league, title):
+        if not src:
+            continue
+        inferred = infer_game_from_text(src)
+        if inferred:
+            return inferred
+    return "Esports"
+
+
 def parse_header(title: str) -> tuple[str, str]:
     """Return (game_raw, league) from the section header text."""
     title = re.sub(r"\s+", " ", title).strip()
@@ -101,7 +151,6 @@ def parse_header(title: str) -> tuple[str, str]:
         parts = [p.strip() for p in title.split(",", 1)]
         return parts[0], parts[1]
     return "Esports", title
-
 
 def stable_event_id(team_a: str, team_b: str, start_time: str | None) -> str:
     import hashlib
@@ -243,14 +292,7 @@ def build_schema_record(
     if not team_a or not team_b:
         return None
 
-    prices: list[float | None] = []
-    for o in odds:
-        try:
-            prices.append(float(o))
-        except ValueError:
-            prices.append(None)
-
-    # Keep only valid numeric prices, preserving order.
+    prices = [american_to_decimal(o) for o in odds]
     valid_prices = [p for p in prices if p is not None]
     price_team1 = valid_prices[0] if len(valid_prices) >= 1 else None
     price_team2 = valid_prices[1] if len(valid_prices) >= 2 else None
@@ -315,7 +357,7 @@ async def scrape_tab(page: Page, tab: str) -> tuple[list[dict[str, Any]], list[d
 
         game_raw, league_from_header = parse_header(row.get("title", ""))
         league = meta.get("league") or league_from_header or ""
-        game = normalise_game(game_raw) if game_raw.lower() != "esports" else normalise_game(league) if league else "Esports"
+        game = normalise_betway_game(game_raw, league, row.get("title", ""))
         start_time = meta.get("start_time")
         event_id = row.get("eventId") or stable_event_id(team_a, team_b, start_time)
 
