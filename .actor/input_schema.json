@@ -8,6 +8,7 @@
             "type": "array",
             "description": "One or more Betway esports tabs to scrape. Allowed: popular, live, upcoming, all.",
             "default": ["live", "upcoming"],
+            "editor": "json",
             "items": {
                 "type": "string"
             }
