@@ -228,22 +228,55 @@ async def click_tab(page: Page, tab: str) -> None:
         pass
 
 
-def build_markets(team_a: str, team_b: str, odds: list[str]) -> list[dict[str, Any]]:
-    markets = []
-    if len(odds) == 2:
-        mapping = [("H", team_a), ("A", team_b)]
-    elif len(odds) >= 3:
-        mapping = [("H", team_a), ("D", None), ("A", team_b)]
-    else:
-        mapping = [(str(i), None) for i in range(len(odds))]
-    for i, odd in enumerate(odds):
+def build_schema_record(
+    team_a: str,
+    team_b: str,
+    odds: list[str],
+    game: str,
+    game_raw: str,
+    league: str,
+    start_time: str | None,
+    event_id: str,
+    is_live: bool,
+) -> dict[str, Any] | None:
+    """Convert Betway row into schema-locked record."""
+    if not team_a or not team_b:
+        return None
+
+    prices: list[float | None] = []
+    for o in odds:
         try:
-            decimal = float(odd)
+            prices.append(float(o))
         except ValueError:
-            continue
-        outcome_id, team = mapping[i] if i < len(mapping) else (str(i), None)
-        markets.append({"market_id": "match_winner", "outcome_id": outcome_id, "team": team, "odds": decimal})
-    return markets
+            prices.append(None)
+
+    # Keep only valid numeric prices, preserving order.
+    valid_prices = [p for p in prices if p is not None]
+    price_team1 = valid_prices[0] if len(valid_prices) >= 1 else None
+    price_team2 = valid_prices[1] if len(valid_prices) >= 2 else None
+    price_draw = valid_prices[2] if len(valid_prices) >= 3 else None
+    if price_team1 is None or price_team2 is None:
+        return None
+
+    match_url = f"https://betway.com/g/en/sports/esports/event/{event_id}" if event_id else ""
+
+    return {
+        "bookmaker": "betway",
+        "game_raw": game_raw,
+        "game": game,
+        "tournament_name": league,
+        "team1": team_a,
+        "team2": team_b,
+        "match_start_time": start_time,
+        "match_url": match_url,
+        "market_name": "Match Winner",
+        "price_team1": price_team1,
+        "price_team2": price_team2,
+        "price_draw": price_draw,
+        "scraped_at": now_iso(),
+        "is_live": is_live,
+        "event_id": event_id,
+    }
 
 
 async def scrape_tab(page: Page, tab: str) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
@@ -286,20 +319,19 @@ async def scrape_tab(page: Page, tab: str) -> tuple[list[dict[str, Any]], list[d
         start_time = meta.get("start_time")
         event_id = row.get("eventId") or stable_event_id(team_a, team_b, start_time)
 
-        items.append({
-            "event_id": event_id,
-            "brand": "betway",
-            "sport": "Esports",
-            "game": game,
-            "league": league,
-            "team_a": team_a,
-            "team_b": team_b,
-            "start_time": start_time,
-            "is_live": tab == "live",
-            "markets": build_markets(team_a, team_b, row.get("odds", [])),
-            "scraped_at": now_iso(),
-        })
+        items.append(build_schema_record(
+            team_a=team_a,
+            team_b=team_b,
+            odds=row.get("odds", []),
+            game=game,
+            game_raw=game_raw,
+            league=league,
+            start_time=start_time,
+            event_id=event_id,
+            is_live=tab == "live",
+        ))
 
+    items = [item for item in items if item is not None]
     return items, jsonld_events
 
 

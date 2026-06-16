@@ -1,7 +1,7 @@
 {
   "actorSpecification": 1,
   "name": "esb-odds-betway",
-  "version": "1.0",
+  "version": "1.1",
   "buildTag": "latest",
   "environmentVariables": {},
   "title": "Betway esports odds",
