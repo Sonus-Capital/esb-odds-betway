@@ -250,7 +250,9 @@ async def scrape_tab(page: Page, tab: str) -> tuple[list[dict[str, Any]], list[d
     url = BETWAY_BASE_URL.format(tab=tab)
     logger.info(f"Scraping tab '{tab}': {url}")
     try:
-        await page.goto(url, wait_until="networkidle", timeout=90000)
+        await page.goto(url, wait_until="domcontentloaded", timeout=90000)
+        with suppress(Exception):
+            await page.wait_for_load_state("networkidle", timeout=15000)
     except Exception as exc:
         logger.warning(f"Navigation to {url} ended with {exc}; continuing anyway")
 
