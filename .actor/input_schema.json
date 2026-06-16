@@ -1,0 +1,29 @@
+{
+    "title": "Betway esports odds scraper configuration",
+    "type": "object",
+    "schemaVersion": 1,
+    "properties": {
+        "tabs": {
+            "title": "Esports tabs to scrape",
+            "type": "array",
+            "description": "One or more Betway esports tabs to scrape.",
+            "default": ["live", "upcoming"],
+            "items": {
+                "type": "string",
+                "enum": ["popular", "live", "upcoming", "all"]
+            }
+        },
+        "headful": {
+            "title": "Headful browser",
+            "type": "boolean",
+            "default": false,
+            "description": "Run the browser in headful mode (useful for debugging)."
+        },
+        "screenshotOnError": {
+            "title": "Screenshot on error",
+            "type": "boolean",
+            "default": true,
+            "description": "Capture a screenshot if navigation or extraction fails."
+        }
+    }
+}

@@ -1,0 +1,10 @@
+{
+  "actorSpecification": 1,
+  "name": "esb-odds-betway",
+  "version": "1.0",
+  "buildTag": "latest",
+  "environmentVariables": {},
+  "title": "Betway esports odds",
+  "description": "Scrapes public esports match-winner odds from Betway without login.",
+  "input": "./input_schema.json"
+}
